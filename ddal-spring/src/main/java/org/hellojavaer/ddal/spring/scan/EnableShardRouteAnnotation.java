@@ -19,29 +19,18 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.hellojavaer.ddal.ddr.shard.ShardRoute;
 import org.hellojavaer.ddal.ddr.shard.ShardRouteContext;
-import org.hellojavaer.ddal.ddr.shard.annotation.ShardRoute;
-import org.hellojavaer.ddal.ddr.shard.enums.ContextPropagation;
-import org.hellojavaer.ddal.ddr.utils.DDRStringUtils;
-import org.springframework.core.DefaultParameterNameDiscoverer;
-import org.springframework.core.ParameterNameDiscoverer;
-import org.springframework.expression.EvaluationContext;
-import org.springframework.expression.Expression;
-import org.springframework.expression.ExpressionParser;
-import org.springframework.expression.ParserContext;
-import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
  * add the following tags in spring configuration file
  * <pre>
- *      <aop:aspectj-autoproxy/>
+        <aop:aspectj-autoproxy/>
         <bean class="org.hellojavaer.ddal.spring.scan.EnableShardRouteAnnotation"/>
  * </pre>
  *
@@ -51,51 +40,32 @@ import java.util.Map;
 @Component
 public class EnableShardRouteAnnotation {
 
-    private ParameterNameDiscoverer parameterNameDiscoverer           = null;
-    private static boolean          notSupportParameterNameDiscoverer = false;
-
-    private Map<Method, InnerBean>  expressionCache                   = new HashMap<Method, InnerBean>();
+    private Map<Method, MethodBasedSpelExpression> expressionCache = new HashMap<>();
 
     @Around("@annotation(shardRoute)")
     public Object around(ProceedingJoinPoint joinPoint, ShardRoute shardRoute) throws Throwable {
         try {
-            //
-            if (shardRoute.value() == ContextPropagation.SUB_CONTEXT) {
-                ShardRouteContext.pushSubContext();
-            } else {
-                ShardRouteContext.clear();
-            }
+            ShardRouteContext.pushContext();
             if (shardRoute.scName() != null && shardRoute.scName().length() > 0 //
                 && shardRoute.sdValue() != null && shardRoute.sdValue().length() > 0) {
                 MethodSignature methodSignature = (MethodSignature) joinPoint.getSignature();
                 Method method = methodSignature.getMethod();
-                InnerBean innerBean = expressionCache.get(method);
+                MethodBasedSpelExpression expression = expressionCache.get(method);
                 Object[] args = joinPoint.getArgs();
-                Object val = null;
-                if (innerBean == null) {
-                    synchronized (this) {
-                        innerBean = expressionCache.get(method);
-                        if (innerBean == null) {
-                            ExpressionParser parser = new SpelExpressionParser();
-                            Expression expression0 = null;
-                            String sdValue = shardRoute.sdValue();
-                            sdValue = DDRStringUtils.trimToNull(sdValue);
-                            if (sdValue != null) {
-                                expression0 = parser.parseExpression(sdValue, PARSER_CONTEXT);
-                            }
-                            String[] paramNames = getParameterNames(method);
-                            val = calculate(expression0, paramNames, args);
-                            InnerBean innerBean1 = new InnerBean(paramNames, expression0);
-                            innerBean1.getExpression();//
-                            expressionCache.put(method, innerBean1);
-                        } else {
-                            val = calculate(innerBean.getExpression(), innerBean.getParameterNames(), args);
+                if (expression == null) {
+                    synchronized (expressionCache) {
+                        expression = expressionCache.get(method);
+                        if (expression == null) {
+                            expression = new MethodBasedSpelExpression(shardRoute.sdValue(), method);
+                            expressionCache.put(method, expression);
                         }
                     }
-                } else {
-                    val = calculate(innerBean.getExpression(), innerBean.getParameterNames(), args);
                 }
-                ShardRouteContext.setDefaultRouteInfo(shardRoute.scName(), val);
+                Object val = expression.parse(Object.class, args);
+                String[] scNames = shardRoute.scName().split(",");
+                for (String scName : scNames) {
+                    ShardRouteContext.setRouteInfo(scName, val);
+                }
             } else {
                 if ((shardRoute.scName() == null || shardRoute.scName().length() == 0)
                     && (shardRoute.sdValue() == null || shardRoute.sdValue().length() == 0)) {
@@ -107,100 +77,8 @@ public class EnableShardRouteAnnotation {
             }
             return joinPoint.proceed(joinPoint.getArgs());
         } finally {
-            if (shardRoute.value() == ContextPropagation.SUB_CONTEXT) {
-                ShardRouteContext.popSubContext();
-            } else {
-                ShardRouteContext.clear();
-            }
+            ShardRouteContext.popContext();
         }
     }
 
-    /**
-     * DefaultParameterNameDiscoverer is supported spring 4.0
-     * @return
-     */
-    private String[] getParameterNames(Method method) {
-        if (notSupportParameterNameDiscoverer) {
-            return null;
-        } else {
-            try {
-                parameterNameDiscoverer = new DefaultParameterNameDiscoverer();// only support from spring4
-                return parameterNameDiscoverer.getParameterNames(method);
-            } catch (NoClassDefFoundError e) {
-                notSupportParameterNameDiscoverer = true;
-                return null;
-            }
-        }
-    }
-
-    private Object calculate(Expression expression, String[] parameterNames, Object[] args) {
-        if (expression == null) {
-            return null;
-        }
-        EvaluationContext context = new StandardEvaluationContext();
-        if (args != null && args.length > 0) {
-            for (int i = 0; i < args.length; i++) {
-                if (parameterNames != null && parameterNames.length > i) {
-                    context.setVariable(parameterNames[i], args[i]);
-                }
-                context.setVariable("$" + i, args[i]);
-            }
-        }
-        Object ret = expression.getValue(context);
-        if (ret == null) {
-            return null;
-        } else {// FIXME: spel will return a list
-            if (ret instanceof List) {
-                if (((List) ret).isEmpty()) {
-                    return null;
-                } else {
-                    return ((List) ret).get(0);
-                }
-            } else {
-                return ret;
-            }
-        }
-    }
-
-    private class InnerBean {
-
-        public InnerBean(String[] parameterNames, Expression expression) {
-            this.parameterNames = parameterNames;
-            this.expression = expression;
-        }
-
-        private String[]   parameterNames;
-        private Expression expression;
-
-        public String[] getParameterNames() {
-            return parameterNames;
-        }
-
-        public void setParameterNames(String[] parameterNames) {
-            this.parameterNames = parameterNames;
-        }
-
-        public Expression getExpression() {
-            return expression;
-        }
-
-        public void setExpression(Expression expression) {
-            this.expression = expression;
-        }
-    }
-
-    private static ParserContext PARSER_CONTEXT = new ParserContext() {
-
-                                                    public boolean isTemplate() {
-                                                        return false;
-                                                    }
-
-                                                    public String getExpressionPrefix() {
-                                                        return null;
-                                                    }
-
-                                                    public String getExpressionSuffix() {
-                                                        return null;
-                                                    }
-                                                };
 }

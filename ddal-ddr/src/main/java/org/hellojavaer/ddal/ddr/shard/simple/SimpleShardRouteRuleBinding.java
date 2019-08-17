@@ -26,18 +26,30 @@ import java.io.Serializable;
  */
 public class SimpleShardRouteRuleBinding implements ShardRouteRuleBinding, Serializable {
 
-    private static final long  serialVersionUID     = 0L;
+    private static final long serialVersionUID = 0L;
 
-    public static final String VALUE_TYPE_OF_NUMBER = "number";
-    public static final String VALUE_TYPE_OF_STRING = "string";
+    private String            scName;
+    private String            tbName;
+    private String            sdKey;
+    private ShardRouteRule    rule;
+    private String            sdValues;
 
-    private String             scName;
-    private String             tbName;
-    private String             sdKey;
-    private ShardRouteRule     rule;
-    private String             sdValues;
-    private String             sdValueType          = VALUE_TYPE_OF_NUMBER;
+    public SimpleShardRouteRuleBinding() {
+    }
 
+    public SimpleShardRouteRuleBinding(String scName, String tbName, String sdKey, ShardRouteRule rule) {
+        this(scName, tbName, sdKey, rule, null);
+    }
+
+    public SimpleShardRouteRuleBinding(String scName, String tbName, String sdKey, ShardRouteRule rule, String sdValues) {
+        this.scName = scName;
+        this.tbName = tbName;
+        this.sdKey = sdKey;
+        this.rule = rule;
+        this.sdValues = sdValues;
+    }
+
+    @Override
     public String getScName() {
         return scName;
     }
@@ -46,6 +58,7 @@ public class SimpleShardRouteRuleBinding implements ShardRouteRuleBinding, Seria
         this.scName = scName;
     }
 
+    @Override
     public String getTbName() {
         return tbName;
     }
@@ -54,6 +67,7 @@ public class SimpleShardRouteRuleBinding implements ShardRouteRuleBinding, Seria
         this.tbName = tbName;
     }
 
+    @Override
     public String getSdKey() {
         return sdKey;
     }
@@ -62,6 +76,7 @@ public class SimpleShardRouteRuleBinding implements ShardRouteRuleBinding, Seria
         this.sdKey = sdKey;
     }
 
+    @Override
     public ShardRouteRule getRule() {
         return rule;
     }
@@ -78,11 +93,4 @@ public class SimpleShardRouteRuleBinding implements ShardRouteRuleBinding, Seria
         this.sdValues = sdValues;
     }
 
-    public String getSdValueType() {
-        return sdValueType;
-    }
-
-    public void setSdValueType(String sdValueType) {
-        this.sdValueType = sdValueType;
-    }
 }

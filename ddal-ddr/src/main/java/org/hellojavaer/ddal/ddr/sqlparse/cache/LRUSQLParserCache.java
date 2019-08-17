@@ -29,13 +29,44 @@ public class LRUSQLParserCache implements SQLParserCache {
 
     private volatile ConcurrentLinkedHashMap<InnerQueryKey, SQLParsedState> cache;
     private Integer                                                         capacity;
+    private Integer                                                         maxSQLLength;
     private SQLParser                                                       sqlParser;
 
-    public LRUSQLParserCache() {
+    private LRUSQLParserCache() {
     }
 
-    public LRUSQLParserCache(Integer capacity, SQLParser sqlParser) {
+    public LRUSQLParserCache(SQLParser sqlParser, Integer capacity) {
+        this(sqlParser, capacity, null);
+    }
+
+    public LRUSQLParserCache(SQLParser sqlParser, Integer capacity, Integer maxSQLLength) {
+        this.sqlParser = sqlParser;
         this.capacity = capacity;
+        this.maxSQLLength = maxSQLLength;
+        init();
+    }
+
+    public Integer getCapacity() {
+        return capacity;
+    }
+
+    public void setCapacity(Integer capacity) {
+        this.capacity = capacity;
+    }
+
+    public Integer getMaxSQLLength() {
+        return maxSQLLength;
+    }
+
+    public void setMaxSQLLength(Integer maxSQLLength) {
+        this.maxSQLLength = maxSQLLength;
+    }
+
+    public SQLParser getSqlParser() {
+        return sqlParser;
+    }
+
+    public void setSqlParser(SQLParser sqlParser) {
         this.sqlParser = sqlParser;
     }
 
@@ -45,6 +76,9 @@ public class LRUSQLParserCache implements SQLParserCache {
      */
     @Override
     public SQLParsedState parse(String sql, ShardRouter shardRouter) {
+        if (maxSQLLength != null && sql.length() > maxSQLLength) {
+            return sqlParser.parse(sql, shardRouter);
+        }// else
         init();
         InnerQueryKey queryKey = new InnerQueryKey(sql, shardRouter);
         SQLParsedState result = cache.get(queryKey);
@@ -63,22 +97,6 @@ public class LRUSQLParserCache implements SQLParserCache {
                 }
             }
         }
-    }
-
-    public Integer getCapacity() {
-        return capacity;
-    }
-
-    public void setCapacity(Integer capacity) {
-        this.capacity = capacity;
-    }
-
-    public SQLParser getSqlParser() {
-        return sqlParser;
-    }
-
-    public void setSqlParser(SQLParser sqlParser) {
-        this.sqlParser = sqlParser;
     }
 
     private class InnerQueryKey {

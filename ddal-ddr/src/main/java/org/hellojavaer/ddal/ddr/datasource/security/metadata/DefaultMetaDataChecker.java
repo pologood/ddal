@@ -34,7 +34,30 @@ public class DefaultMetaDataChecker implements MetaDataChecker {
     private static final String              MYSQL_AND_ORACLE = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? ";
     private static final String              SQL_SERVER       = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG = ? ";
 
-    private static final Map<String, String> map              = new LinkedHashMap<String, String>();
+    private static final Map<String, String> databaseTypeMap  = new LinkedHashMap<String, String>();
+
+    private String                           databaseType     = "mysql";
+
+    static {
+        databaseTypeMap.put("mysql", MYSQL_AND_ORACLE);
+        databaseTypeMap.put("oracle", MYSQL_AND_ORACLE);
+        databaseTypeMap.put("sqlserver", SQL_SERVER);
+    }
+
+    private DefaultMetaDataChecker() {
+    }
+
+    public DefaultMetaDataChecker(String databaseType) {
+        this.databaseType = databaseType;
+    }
+
+    public String getDatabaseType() {
+        return databaseType;
+    }
+
+    private void setDatabaseType(String databaseType) {
+        this.databaseType = databaseType;
+    }
 
     /**
      *  检查指定schema下是否包含指定的table
@@ -42,12 +65,12 @@ public class DefaultMetaDataChecker implements MetaDataChecker {
      * @throws IllegalMetaDataException
      */
     @Override
-    public void check(Connection conn, String scName, Set<String> tables) throws IllegalMetaDataException {
+    public void check(Connection conn, String scName, Collection<String> tbNames) throws IllegalMetaDataException {
         if (scName == null) {
             throw new IllegalArgumentException("[Check MetaData Failed] parameter 'scName' can't be null");
         }
-        if (tables == null || tables.isEmpty()) {
-            throw new IllegalArgumentException("[Check MetaData Failed] parameter 'tables' can't be empty");
+        if (tbNames == null || tbNames.isEmpty()) {
+            throw new IllegalArgumentException("[Check MetaData Failed] parameter 'tbNames' can't be empty");
         }
         try {
             Set<String> set = getAllTables(conn, scName);
@@ -55,25 +78,30 @@ public class DefaultMetaDataChecker implements MetaDataChecker {
                 throw new IllegalMetaDataException(
                                                    "[Check MetaData Failed] Schema:'"
                                                            + scName
-                                                           + "' has nothing tables. but in your configuration it requires tables:"
-                                                           + DDRJSONUtils.toJSONString(tables));
+                                                           + "' has nothing tables. but in your configuration it requires table:"
+                                                           + DDRJSONUtils.toJSONString(tbNames));
             }
-            if (tables != null && !tables.isEmpty() && !set.containsAll(tables)) {
-                throw new IllegalMetaDataException("[Check MetaData Failed] Schema:'" + scName + "' only has tables:"
-                                                   + DDRJSONUtils.toJSONString(set)
-                                                   + ", but in your configuration it requires tables:"
-                                                   + DDRJSONUtils.toJSONString(tables));
+            for (String tbName : tbNames) {
+                if (!set.contains(tbName)) {
+                    throw new IllegalMetaDataException("[Check MetaData Failed] Schema:'" + scName
+                                                       + "' only has tables:" + DDRJSONUtils.toJSONString(set)
+                                                       + ", but in your configuration it requires table:" + tbName);
+                }
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private static Set<String> getAllTables(Connection conn, String scName) throws SQLException {
-        String sql = get(conn);
+    private Set<String> getAllTables(Connection conn, String scName) throws SQLException {
+        String sql = databaseTypeMap.get(databaseType);
+        if (sql == null) {
+            sql = MYSQL_AND_ORACLE;
+        }
         PreparedStatement statement = conn.prepareStatement(sql);
         statement.setString(1, scName);
         ResultSet rs = statement.executeQuery();
+
         Set<String> tabs = new HashSet<>();
         while (rs.next()) {
             tabs.add(DDRStringUtils.toLowerCase(rs.getString(1)));
@@ -81,25 +109,7 @@ public class DefaultMetaDataChecker implements MetaDataChecker {
         return tabs;
     }
 
-    private static String get(Connection conn) {
-        String connPackage = conn.getClass().getPackage().getName();
-        if (connPackage.contains("mysql")) {
-            return MYSQL_AND_ORACLE;
-        } else if (connPackage.contains("oracle")) {
-            return MYSQL_AND_ORACLE;
-        } else if (connPackage.contains("sqlserver")) {
-            return SQL_SERVER;
-        } else {
-            for (Map.Entry<String, String> entry : map.entrySet()) {
-                if (connPackage.contains(entry.getKey())) {
-                    return entry.getValue();
-                }
-            }
-            return MYSQL_AND_ORACLE;
-        }
-    }
-
-    public static void registerQueryMetaDataSQL(String keyWord, String sql) {
-        map.put(keyWord, sql);
+    public static void registerQueryMetaDataSQL(String databaseType, String sql) {
+        databaseTypeMap.put(databaseType, sql);
     }
 }

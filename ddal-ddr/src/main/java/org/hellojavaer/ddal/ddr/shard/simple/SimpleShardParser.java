@@ -29,8 +29,16 @@ import java.util.Map;
  */
 public class SimpleShardParser implements ShardParser {
 
-    private ShardRouter shardRouter = null;
-    private SQLParser   sqlParser   = null;
+    private ShardRouter shardRouter;
+    private SQLParser   sqlParser;
+
+    private SimpleShardParser() {
+    }
+
+    public SimpleShardParser(SQLParser sqlParser, ShardRouter shardRouter) {
+        setSqlParser(sqlParser);
+        setShardRouter(shardRouter);
+    }
 
     public ShardRouter getShardRouter() {
         return shardRouter;

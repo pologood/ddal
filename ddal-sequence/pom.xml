@@ -15,12 +15,11 @@
     <url>https://github.com/hellojavaer/ddal</url>
 
     <properties>
-        <ddal.version>1.0.0-SNAPSHOT</ddal.version>
-        <junit.version>4.11</junit.version>
         <gpg.skip>true</gpg.skip>
         <javadoc.skip>false</javadoc.skip>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <junit.version>4.11</junit.version>
         <jdk.version>1.7</jdk.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
     <developers>
         <developer>
@@ -28,6 +27,7 @@
             <name>Kaiming Zou</name>
             <email>hellojavaer@gmail.com</email>
             <roles>
+                <role>owner</role>
                 <role>developer</role>
             </roles>
             <timezone>8</timezone>
@@ -116,7 +116,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>2.4.2</version>
                 <configuration>
-                    <skipTests>true</skipTests>
+                    <skipTests>false</skipTests>
                 </configuration>
             </plugin>
             <plugin>
@@ -142,8 +142,13 @@
     <dependencies>
         <dependency>
             <groupId>org.hellojavaer.ddal</groupId>
+            <artifactId>ddal-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.hellojavaer.ddal</groupId>
             <artifactId>ddal-ddr</artifactId>
-            <version>${ddal.version}</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
